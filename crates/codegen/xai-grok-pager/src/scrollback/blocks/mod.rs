@@ -39,3 +39,5 @@ pub use workflow::{WorkflowBlock, WorkflowBlockPhase, WorkflowBlockStatus};
 
 // Backwards compatibility alias
 pub type EditBlock = EditToolCallBlock;
+
+pub mod choice;

@@ -12,6 +12,7 @@ use xai_grok_pager_diff::DiffHunk;
 // default method bodies into a generated macro, where `crate::` trips
 // `clippy::crate_in_macro_def`.
 
+use super::blocks::choice::ChoiceBlock;
 use super::blocks::mermaid_content::DiagramAffordance;
 use super::blocks::{
     AgentMessageBlock, BgTaskBlock, BtwBlock, ContextInfoBlock, CreditLimitBlock,
@@ -393,6 +394,8 @@ impl BlockContent for StubBlock {
 pub enum RenderBlock {
     /// Stub block for testing.
     Stub(StubBlock),
+    /// Render-only typed choice request.
+    Choice(ChoiceBlock),
     /// User's prompt.
     UserPrompt(UserPromptBlock),
     /// Agent's response message.
@@ -423,6 +426,7 @@ macro_rules! delegate_block {
     ($self:expr, $method:ident ( $($arg:expr),* )) => {
         match $self {
             RenderBlock::Stub(b) => b.$method($($arg),*),
+            RenderBlock::Choice(b) => b.$method($($arg),*),
             RenderBlock::UserPrompt(b) => b.$method($($arg),*),
             RenderBlock::AgentMessage(b) => b.$method($($arg),*),
             RenderBlock::ToolCall(b) => b.$method($($arg),*),
@@ -1013,6 +1017,7 @@ impl RenderBlock {
         let theme = Theme::current();
 
         match self {
+            RenderBlock::Choice(_) => Some(theme.accent_plan),
             RenderBlock::UserPrompt(_) => Some(theme.text_primary),
             RenderBlock::AgentMessage(_) => None, // No accent for agent messages
             RenderBlock::Workflow(_) => None,
@@ -1167,6 +1172,13 @@ impl RenderBlock {
     /// with no searchable text.
     pub fn searchable_text(&self) -> Option<String> {
         match self {
+            RenderBlock::Choice(b) => join_searchable(
+                b.prompt
+                    .clone()
+                    .into_iter()
+                    .chain(b.options.iter().cloned())
+                    .map(Some),
+            ),
             RenderBlock::Stub(b) => join_searchable([Some(b.text.clone())]),
             RenderBlock::UserPrompt(b) => join_searchable([Some(b.text.clone())]),
             RenderBlock::AgentMessage(b) => join_searchable([Some(b.copy_text(false))]),

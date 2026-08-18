@@ -1394,9 +1394,20 @@ impl ScrollbackState {
         if let Some(entry) = self.get_by_id_mut(id) {
             entry.is_running = false;
             entry.finished_at = Some(Instant::now());
-            // Finish streaming renderers (final safety re-render)
+            // Finish streaming renderers (final safety re-render).
+            // Choice interception happens only now, after the markdown renderer
+            // has frozen and exposed closed-fence metadata.
+            let choice = if let RenderBlock::AgentMessage(msg) = &mut entry.block {
+                msg.finish();
+                msg.choice()
+            } else {
+                None
+            };
+            if let Some(choice) = choice {
+                entry.block = RenderBlock::Choice(choice);
+            }
             match &mut entry.block {
-                RenderBlock::AgentMessage(msg) => msg.finish(),
+                RenderBlock::AgentMessage(_) | RenderBlock::Choice(_) => {}
                 RenderBlock::Thinking(thinking) => {
                     // finish() freezes the local started_at timer into
                     // elapsed_time_ms. Only use server time as a fallback
@@ -3533,5 +3544,42 @@ mod tests {
         assert_eq!(state.selected(), Some(0));
         assert_eq!(state.current_turn(), Some(0));
         assert_eq!(state.scroll_offset(), 2);
+    }
+
+    #[test]
+    fn finalized_ui_choice_fence_becomes_typed_choice_block() {
+        let mut state = ScrollbackState::new();
+        let id = state.start_streaming_agent();
+        assert!(state.push_chunk_to_agent(
+            id,
+            "```ui-choice\nprompt: Pick one\n- Alpha\nignored\n- Beta\n```\n",
+        ));
+
+        state.finish_running(id);
+
+        let entry = state.get_by_id(id).expect("stream entry remains present");
+        let RenderBlock::Choice(choice) = &entry.block else {
+            panic!("valid ui-choice must be intercepted into Choice");
+        };
+        assert_eq!(choice.prompt.as_deref(), Some("Pick one"));
+        assert_eq!(choice.options, ["Alpha", "Beta"]);
+    }
+
+    #[test]
+    fn finalized_ui_choice_without_options_stays_markdown_code_block() {
+        let mut state = ScrollbackState::new();
+        let id = state.start_streaming_agent();
+        assert!(
+            state.push_chunk_to_agent(id, "```ui-choice\nprompt: Nothing to pick\nignored\n```\n",)
+        );
+
+        state.finish_running(id);
+
+        let entry = state.get_by_id(id).expect("stream entry remains present");
+        let RenderBlock::AgentMessage(message) = &entry.block else {
+            panic!("malformed ui-choice must remain a markdown agent message");
+        };
+        assert_eq!(message.content().choice(), None);
+        assert_eq!(message.content().mermaid_block_ranges().len(), 0);
     }
 }

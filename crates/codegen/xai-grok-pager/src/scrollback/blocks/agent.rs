@@ -90,6 +90,11 @@ impl AgentMessageBlock {
         &self.mermaid
     }
 
+    /// Return a typed choice derived from the finalized markdown spans.
+    pub fn choice(&self) -> Option<super::choice::ChoiceBlock> {
+        self.content.choice()
+    }
+
     /// Set the raw mode, re-rendering if it changed.
     pub fn set_raw_mode(&mut self, raw: bool) {
         self.content.set_raw_mode(raw);

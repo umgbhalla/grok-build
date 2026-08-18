@@ -261,6 +261,12 @@ impl MarkdownContent {
         super::mermaid_content::MermaidContent::from_view(&state.renderer.view())
     }
 
+    /// Derive a valid typed choice from finalized markdown fence metadata.
+    pub fn choice(&self) -> Option<super::choice::ChoiceBlock> {
+        let state = self.state.borrow();
+        super::choice::ChoiceBlock::from_view(&state.renderer.view())
+    }
+
     /// Get the current generation counter.
     ///
     /// Bumped on every content mutation (push_chunk, finish, set_raw_mode).

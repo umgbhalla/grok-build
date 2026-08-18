@@ -999,6 +999,7 @@ pub fn extract_last_response_type(agent: &AgentView) -> String {
             break;
         };
         match &entry.block {
+            RenderBlock::Choice(_) => return "Choice".to_string(),
             RenderBlock::AgentMessage(_) => {
                 // Idle → the last message is the result ("Response"). While
                 // running we only reach here in the ToolRunning case (other
@@ -1156,6 +1157,13 @@ fn block_short_text(block: &crate::scrollback::block::RenderBlock) -> Option<Str
         body.lines().next().unwrap_or("").to_string()
     }
     match block {
+        RenderBlock::Choice(b) => Some(
+            b.prompt
+                .as_deref()
+                .or_else(|| b.options.first().map(String::as_str))
+                .unwrap_or("Choice")
+                .to_string(),
+        ),
         RenderBlock::UserPrompt(b) => Some(format!("\u{2771} {}", first_line_of(&b.text))),
         RenderBlock::AgentMessage(b) => Some(first_line_of(&b.text())),
         RenderBlock::Thinking(b) => Some(format!("(thinking) {}", first_line_of(&b.text()))),
