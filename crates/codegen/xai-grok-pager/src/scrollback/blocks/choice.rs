@@ -11,6 +11,8 @@ use xai_grok_markdown::MarkdownRenderView;
 pub struct ChoiceBlock {
     pub prompt: Option<String>,
     pub options: Vec<String>,
+    selected: usize,
+    submitted: bool,
 }
 
 impl ChoiceBlock {
@@ -39,7 +41,43 @@ impl ChoiceBlock {
             .map(str::to_owned)
             .collect::<Vec<_>>();
 
-        (!options.is_empty()).then_some(Self { prompt, options })
+        (!options.is_empty()).then_some(Self {
+            prompt,
+            options,
+            selected: 0,
+            submitted: false,
+        })
+    }
+
+    /// Move the highlighted option, wrapping at either end.
+    pub fn move_selection(&mut self, delta: isize) {
+        let len = self.options.len() as isize;
+        self.selected = (self.selected as isize + delta).rem_euclid(len) as usize;
+    }
+
+    /// Text to send when the highlighted option is accepted.
+    pub fn selected_prompt(&self) -> String {
+        let option = &self.options[self.selected];
+        match self.prompt.as_deref() {
+            Some(prompt) => format!("{prompt}: {option}"),
+            None => option.clone(),
+        }
+    }
+
+    pub fn selected_index(&self) -> usize {
+        self.selected
+    }
+
+    pub(crate) fn is_pending(&self) -> bool {
+        !self.submitted
+    }
+
+    pub(crate) fn take_selected_prompt(&mut self) -> Option<String> {
+        if self.submitted {
+            return None;
+        }
+        self.submitted = true;
+        Some(self.selected_prompt())
     }
 }
 
@@ -61,6 +99,11 @@ impl BlockContent for ChoiceBlock {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD);
         }
+        let selected_line = self.selected + usize::from(self.prompt.is_some());
+        output.lines[selected_line].content.style = Style::default()
+            .fg(Color::Black)
+            .bg(Color::Cyan)
+            .add_modifier(Modifier::BOLD);
         output
     }
 
@@ -79,5 +122,27 @@ mod tests {
         assert_eq!(parsed.prompt.as_deref(), Some("Pick"));
         assert_eq!(parsed.options, ["One", "Two"]);
         assert!(ChoiceBlock::parse("prompt: Pick\nignored\n").is_none());
+    }
+
+    #[test]
+    fn render_block_moves_and_selects_choice() {
+        let mut block = crate::scrollback::RenderBlock::Choice(
+            ChoiceBlock::parse("prompt: Pick\n- One\n- Two\n").unwrap(),
+        );
+
+        assert!(block.move_choice_selection(1));
+        let crate::scrollback::RenderBlock::Choice(choice) = &block else {
+            unreachable!()
+        };
+        assert_eq!(choice.selected_index(), 1);
+        assert_eq!(block.selected_choice_prompt().as_deref(), Some("Pick: Two"));
+
+        assert!(block.move_choice_selection(1));
+        assert_eq!(
+            block.take_selected_choice_prompt().as_deref(),
+            Some("Pick: One")
+        );
+        assert_eq!(block.take_selected_choice_prompt(), None);
+        assert!(!block.move_choice_selection(1));
     }
 }

@@ -1562,6 +1562,32 @@ impl ScrollbackState {
         self.entries.values_mut()
     }
 
+    /// Move the highlight on the most recent choice block.
+    pub fn move_latest_choice_selection(&mut self, delta: isize) -> bool {
+        let moved = self
+            .entries
+            .values_mut()
+            .rev()
+            .any(|entry| entry.block.move_choice_selection(delta));
+        if moved {
+            self.bump_generation();
+        }
+        moved
+    }
+
+    /// Consume the most recent pending choice and return its submission text.
+    pub fn take_latest_choice_prompt(&mut self) -> Option<String> {
+        let prompt = self
+            .entries
+            .values_mut()
+            .rev()
+            .find_map(|entry| entry.block.take_selected_choice_prompt());
+        if prompt.is_some() {
+            self.bump_generation();
+        }
+        prompt
+    }
+
     // Widget Helpers (used by ScrollbackPane widget)
 
     /// Prepare layout for rendering.

@@ -992,6 +992,34 @@ impl RenderBlock {
         }
     }
 
+    /// Move a choice highlight. Returns false for non-choice blocks.
+    pub fn move_choice_selection(&mut self, delta: isize) -> bool {
+        let Self::Choice(choice) = self else {
+            return false;
+        };
+        if !choice.is_pending() {
+            return false;
+        }
+        choice.move_selection(delta);
+        true
+    }
+
+    /// Consume the highlighted choice, returning its submission text once.
+    pub fn take_selected_choice_prompt(&mut self) -> Option<String> {
+        let Self::Choice(choice) = self else {
+            return None;
+        };
+        choice.take_selected_prompt()
+    }
+
+    /// Return the prompt represented by the highlighted choice.
+    pub fn selected_choice_prompt(&self) -> Option<String> {
+        let Self::Choice(choice) = self else {
+            return None;
+        };
+        Some(choice.selected_prompt())
+    }
+
     /// Drop rebuildable render caches held inside the block.
     ///
     /// Currently the markdown word-wrap cache on markdown-backed blocks
